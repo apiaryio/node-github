@@ -615,7 +615,7 @@ var Client = module.exports = function(config) {
         var path = url;
         var protocol = this.config.protocol || this.constants.protocol || "http";
         var host = this.config.host || this.constants.host;
-        var port = this.config.port || this.constants.port || (protocol == "https" ? 443 : 80);
+        var port = this.config.port || (protocol == "https" ? 443 : 80) || this.constants.port;
 
         var headers = {
             "content-length": "0"
