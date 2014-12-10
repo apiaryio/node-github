@@ -676,9 +676,6 @@ var Client = module.exports = function(config) {
                 proxyUrl = "https://" + proxyUrl;
 
             var parsedUrl = Url.parse(proxyUrl);
-            protocol = parsedUrl.protocol.replace(":", "");
-            host = parsedUrl.hostname;
-            port = parsedUrl.port || (protocol == "https" ? 443 : 80);
 
             if (parsedUrl.auth) {
                 headers["Proxy-Authorization"] = "Basic " + (new Buffer(parsedUrl.auth).toString("base64"))
