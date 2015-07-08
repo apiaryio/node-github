@@ -767,7 +767,12 @@ var Client = module.exports = function(config) {
             options.rejectUnauthorized = this.config.rejectUnauthorized;
 
         if (this.debug) {
-            console.log("REQUEST: ", options);
+            // options.uri can contain access_token
+            debugOptions = JSON.parse(JSON.stringify(options));
+            if (debugOptions.uri) {
+                debugOptions.uri = debugOptions.uri.replace(/access_token=(.*)/g,'access_token=<TOKEN_REMOVED>');
+            }
+            console.log("REQUEST: ", debugOptions);
         }
 
         request(options, function (err, res, body) {
