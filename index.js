@@ -748,7 +748,7 @@ var Client = module.exports = function(config) {
         if (hasBody && query.length) {
             if (self.debug)
                 console.log("REQUEST BODY: " + query + "\n");
-            options.form = query;
+            options.body = query;
         }
 
         if (this.config.timeout) {
