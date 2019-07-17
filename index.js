@@ -3,6 +3,7 @@
 var error = require("./error");
 var Util = require("./util");
 var Url = require("url");
+var request = require("request");
 
 /** section: github
  * class Client
@@ -317,6 +318,9 @@ var Client = module.exports = function(config) {
                     return;
                 var messageType = baseType + "/" + routePart;
                 if (block.url && block.params) {
+                    if (self.config.pathPrefix) {
+                        block.url = self.config.pathPrefix + block.url;
+                    }
                     // we ended up at an API definition part!
                     var endPoint = messageType.replace(/^[\/]+/g, "");
                     var parts = messageType.split("/");
@@ -573,9 +577,6 @@ var Client = module.exports = function(config) {
 
     function getQueryAndUrl(msg, def, format, config) {
         var url = def.url;
-        if (config.pathPrefix) {
-            url = config.pathPrefix + def.url;
-        }
         var ret = {
             query: format == "json" ? {} : []
         };
@@ -658,35 +659,33 @@ var Client = module.exports = function(config) {
         var host = this.config.host || this.constants.host;
         var port = this.config.port || this.constants.port || (protocol == "https" ? 443 : 80);
 
+        var headers = {
+            "content-length": "0",
+            "host": host
+        };
+
         var proxyUrl;
+
         if (this.config.proxy !== undefined) {
             proxyUrl = this.config.proxy;
         } else {
             proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
         }
         if (proxyUrl) {
-            path = Url.format({
-                protocol: protocol,
-                hostname: host,
-                port: port,
-                pathname: path
-            });
-
             if (!/^(http|https):\/\//.test(proxyUrl))
                 proxyUrl = "https://" + proxyUrl;
 
             var parsedUrl = Url.parse(proxyUrl);
-            protocol = parsedUrl.protocol.replace(":", "");
-            host = parsedUrl.hostname;
-            port = parsedUrl.port || (protocol == "https" ? 443 : 80);
+
+            if (parsedUrl.auth) {
+                headers["Proxy-Authorization"] = "Basic " + (new Buffer(parsedUrl.auth).toString("base64"))
+            }
         }
         if (!hasBody && query.length)
             path += "?" + query.join("&");
 
-        var headers = {
-            "host": host,
-            "content-length": "0"
-        };
+        headers["content-length"] = "0";
+
         if (hasBody) {
             if (format == "json")
                 query = JSON.stringify(query);
@@ -738,80 +737,57 @@ var Client = module.exports = function(config) {
         if (!("accept" in headers))
             headers.accept = this.config.requestMedia || this.constants.requestMedia;
 
+        var uri = protocol + "://" + host + ":" + port + path;
+
         var options = {
-            host: host,
-            port: port,
-            path: path,
+            uri: uri,
             method: method,
             headers: headers
         };
 
+        if (hasBody && query.length) {
+            if (self.debug)
+                console.log("REQUEST BODY: " + query + "\n");
+            options.body = query;
+        }
+
+        if (this.config.timeout) {
+            options.timeout = this.config.timeout;
+        }
+
+        if (this.config.insecure !== undefined) {
+            options.strictSSL = this.config.insecure || false;
+        }
+
+        if (proxyUrl) {
+            options.proxy = proxyUrl;
+        }
+
         if (this.config.rejectUnauthorized !== undefined)
             options.rejectUnauthorized = this.config.rejectUnauthorized;
 
-        if (this.debug)
+        if (this.debug) {
             console.log("REQUEST: ", options);
+        }
 
-        var callbackCalled = false
+        request(options, function (err, res, body) {
 
-        var req = require(protocol).request(options, function(res) {
+            if (err) {
+                return callback(err);
+            }
+
             if (self.debug) {
                 console.log("STATUS: " + res.statusCode);
                 console.log("HEADERS: " + JSON.stringify(res.headers));
             }
+
             res.setEncoding("utf8");
-            var data = "";
-            res.on("data", function(chunk) {
-                data += chunk;
-            });
-            res.on("error", function(err) {
-                if (!callbackCalled) {
-                   callbackCalled = true;
-                   callback(err);
-                }
-            });
-            res.on("end", function() {
-                if (callbackCalled)
-                    return;
-
-                callbackCalled = true;
-                if (res.statusCode >= 400 && res.statusCode < 600 || res.statusCode < 10) {
-                    callback(new error.HttpError(data, res.statusCode));
-                } else {
-                    res.data = data;
-                    callback(null, res);
-                }
-            });
-        });
-
-        if (this.config.timeout) {
-            req.setTimeout(this.config.timeout);
-        }
-
-        req.on("error", function(e) {
-            if (self.debug)
-                console.log("problem with request: " + e.message);
-            if (!callbackCalled) {
-                callbackCalled = true;
-                callback(e.message);
+            if (res.statusCode >= 400 && res.statusCode < 600 || res.statusCode < 10) {
+                return callback(new error.HttpError(body, res.statusCode));
+            } else {
+                res.data = body;
+                return callback(null, res);
             }
         });
-
-        req.on("timeout", function() {
-            if (self.debug)
-                console.log("problem with request: timed out");
-            if (!callbackCalled) {
-                callbackCalled = true;
-                callback(new error.GatewayTimeout());
-            }
-        });
-
-        // write data to request body
-        if (hasBody && query.length) {
-            if (self.debug)
-                console.log("REQUEST BODY: " + query + "\n");
-            req.write(query + "\n");
-        }
-        req.end();
     };
 }).call(Client.prototype);
