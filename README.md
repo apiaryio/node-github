@@ -91,9 +91,9 @@ credentials for the next request.
 
 Other examples for the various authentication methods:
 ```javascript
-// OAuth2
+// Preferred GitHub authentication using authorization header with token as value
 github.authenticate({
-    type: "oauth",
+    type: "token",
     token: token
 });
 
@@ -104,9 +104,9 @@ github.authenticate({
     secret: "clientSecret"
 })
 
-// Deprecated Gihub API token (seems not to be working with the v3 API)
+// Deprecated OAuth2, will add access_token into query parameter of the API call
 github.authenticate({
-    type: "token",
+    type: "oauth",
     token: token
 });
 ```
